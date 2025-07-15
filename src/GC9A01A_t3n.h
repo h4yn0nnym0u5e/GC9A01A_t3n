@@ -76,15 +76,15 @@
 #ifndef DISABLE_GC9A01A_FRAMEBUFFER
 #if defined(__MK66FX1M0__) // T3.6
 #define ENABLE_GC9A01A_FRAMEBUFFER
-#define SCREEN_DMA_NUM_SETTINGS                                                \
+#define GC9A01A_DMA_NUM_SETTINGS                                                \
   2 // see if making it a constant value makes difference...
 #elif defined(__MK64FX512__) // T3.5
 #define ENABLE_GC9A01A_FRAMEBUFFER
-#define SCREEN_DMA_NUM_SETTINGS                                                \
+#define GC9A01A_DMA_NUM_SETTINGS                                                \
   4 // see if making it a constant value makes difference...
 #elif defined(__IMXRT1052__) || defined(__IMXRT1062__)
 #define ENABLE_GC9A01A_FRAMEBUFFER
-#define SCREEN_DMA_NUM_SETTINGS                                                \
+#define GC9A01A_DMA_NUM_SETTINGS                                                \
   2 // see if making it a constant value makes difference...
 #endif
 #endif
@@ -95,6 +95,7 @@
 #include "Arduino.h"
 #include <DMAChannel.h>
 #include <SPI.h>
+#include "DisplaySharedSPIStatus.h"
 
 #endif
 #include <stdint.h>
@@ -678,7 +679,7 @@ protected:
   void waitTransmitComplete(uint32_t mcr);
 
 #elif defined(__IMXRT1052__) || defined(__IMXRT1062__)
-  uint8_t pending_rx_count = 0; // hack ...
+  // uint8_t pending_rx_count = 0; // hack ...
   void waitFifoNotFull(void);
   void waitFifoEmpty(void);
   void waitTransmitComplete(void);
@@ -692,7 +693,8 @@ protected:
 #if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
   uint32_t _cspinmask;
   volatile uint32_t *_csport;
-  uint32_t _spi_tcr_current;
+  // uint32_t _spi_tcr_current;
+  DisplaySharedSPIStatus& _shared_spi_status = DisplaySharedSPIStatus::getInstance();
   uint32_t _dcpinmask;
   uint32_t _tcr_dc_assert;
   uint32_t _tcr_dc_not_assert;
@@ -797,7 +799,7 @@ protected:
     _pspi->beginTransaction(SPISettings(clock, MSBFIRST, SPI_MODE0));
 #if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
     if (!_dcport)
-      _spi_tcr_current = _pimxrt_spi->TCR; // Only if DC is on hardware CS
+    _shared_spi_status[_spi_num]._spi_tcr_current = _pimxrt_spi->TCR; // Only if DC is on hardware CS
 #endif
     if (_csport) {
 #if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
@@ -857,6 +859,7 @@ protected:
 #endif
   void maybeUpdateTCR(
       uint32_t requested_tcr_state) /*__attribute__((always_inline)) */ {
+      uint32_t&  _spi_tcr_current = _shared_spi_status[_spi_num]._spi_tcr_current;
     if ((_spi_tcr_current & TCR_MASK) != requested_tcr_state) {
       bool dc_state_change = (_spi_tcr_current & LPSPI_TCR_PCS(3)) !=
                              (requested_tcr_state & LPSPI_TCR_PCS(3));
@@ -884,40 +887,40 @@ protected:
   void writecommand_cont(uint8_t c) __attribute__((always_inline)) {
     maybeUpdateTCR(_tcr_dc_assert | LPSPI_TCR_FRAMESZ(7) /*| LPSPI_TCR_CONT*/);
     _pimxrt_spi->TDR = c;
-    pending_rx_count++; //
+    _shared_spi_status[_spi_num]._pending_rx_count++; //
     waitFifoNotFull();
   }
   void writedata8_cont(uint8_t c) __attribute__((always_inline)) {
     maybeUpdateTCR(_tcr_dc_not_assert | LPSPI_TCR_FRAMESZ(7) | LPSPI_TCR_CONT);
     _pimxrt_spi->TDR = c;
-    pending_rx_count++; //
+    _shared_spi_status[_spi_num]._pending_rx_count++; //
     waitFifoNotFull();
   }
   void writedata16_cont(uint16_t d) __attribute__((always_inline)) {
     maybeUpdateTCR(_tcr_dc_not_assert | LPSPI_TCR_FRAMESZ(15) | LPSPI_TCR_CONT);
     _pimxrt_spi->TDR = d;
-    pending_rx_count++; //
+    _shared_spi_status[_spi_num]._pending_rx_count++; //
     waitFifoNotFull();
   }
   void writecommand_last(uint8_t c) __attribute__((always_inline)) {
     maybeUpdateTCR(_tcr_dc_assert | LPSPI_TCR_FRAMESZ(7));
     _pimxrt_spi->TDR = c;
     //		_pimxrt_spi->SR = LPSPI_SR_WCF | LPSPI_SR_FCF | LPSPI_SR_TCF;
-    pending_rx_count++; //
+    _shared_spi_status[_spi_num]._pending_rx_count++; //
     waitTransmitComplete();
   }
   void writedata8_last(uint8_t c) __attribute__((always_inline)) {
     maybeUpdateTCR(_tcr_dc_not_assert | LPSPI_TCR_FRAMESZ(7));
     _pimxrt_spi->TDR = c;
     //		_pimxrt_spi->SR = LPSPI_SR_WCF | LPSPI_SR_FCF | LPSPI_SR_TCF;
-    pending_rx_count++; //
+    _shared_spi_status[_spi_num]._pending_rx_count++; //
     waitTransmitComplete();
   }
   void writedata16_last(uint16_t d) __attribute__((always_inline)) {
     maybeUpdateTCR(_tcr_dc_not_assert | LPSPI_TCR_FRAMESZ(15));
     _pimxrt_spi->TDR = d;
     //		_pimxrt_spi->SR = LPSPI_SR_WCF | LPSPI_SR_FCF | LPSPI_SR_TCF;
-    pending_rx_count++; //
+    _shared_spi_status[_spi_num]._pending_rx_count++; //
     waitTransmitComplete();
   }
 
