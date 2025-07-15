@@ -2003,7 +2003,7 @@ FLASHMEM void GC9A01A_t3n::begin(uint32_t spi_clock, uint32_t spi_clock_read) {
   Serial.printf("_t3n::begin mosi:%d SCLK:%d CS:%d DC:%d SPI clocks:%lu %lu\n",
               _mosi, _sclk, _cs, _dc, _SPI_CLOCK, _SPI_CLOCK_READ);
   */
- 
+
   // Note this display does not use MISO so will ignore it.
   if (SPI.pinIsMOSI(_mosi) && SPI.pinIsSCK(_sclk)) {
     _pspi = &SPI;
@@ -2064,8 +2064,8 @@ FLASHMEM void GC9A01A_t3n::begin(uint32_t spi_clock, uint32_t spi_clock_read) {
   uint32_t *pa = (uint32_t *)((void *)_pspi);
   _spi_hardware = (SPIClass::SPI_Hardware_t *)(void *)pa[1];
 
-  _pspi->begin();
 #ifdef KINETISK
+  _pspi->begin();
   if (_pspi->pinIsChipSelect(_cs, _dc)) {
     pcs_data = _pspi->setCS(_cs);
     pcs_command = pcs_data | _pspi->setCS(_dc);
@@ -2086,8 +2086,13 @@ FLASHMEM void GC9A01A_t3n::begin(uint32_t spi_clock, uint32_t spi_clock_read) {
     }
   }
 #elif defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
+		if (!_shared_spi_status[_spi_num]._begin_done)
+		{
+			_pspi->begin();
+			_shared_spi_status[_spi_num]._begin_done = true;
+			_shared_spi_status[_spi_num]._pending_rx_count = 0;
+		}
   // Serial.println("   T4 setup CS/DC"); Serial.flush();
-  _shared_spi_status[_spi_num]._pending_rx_count = 0; // Make sure it is zero if we we do a second begin...
   _csport = portOutputRegister(_cs);
   _cspinmask = digitalPinToBitMask(_cs);
   pinMode(_cs, OUTPUT);
