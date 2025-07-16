@@ -76,15 +76,15 @@
 #ifndef DISABLE_GC9A01A_FRAMEBUFFER
 #if defined(__MK66FX1M0__) // T3.6
 #define ENABLE_GC9A01A_FRAMEBUFFER
-#define SCREEN_DMA_NUM_SETTINGS                                                \
+#define GC9A01A_DMA_NUM_SETTINGS                                                \
   2 // see if making it a constant value makes difference...
 #elif defined(__MK64FX512__) // T3.5
 #define ENABLE_GC9A01A_FRAMEBUFFER
-#define SCREEN_DMA_NUM_SETTINGS                                                \
+#define GC9A01A_DMA_NUM_SETTINGS                                                \
   4 // see if making it a constant value makes difference...
 #elif defined(__IMXRT1052__) || defined(__IMXRT1062__)
 #define ENABLE_GC9A01A_FRAMEBUFFER
-#define SCREEN_DMA_NUM_SETTINGS                                                \
+#define GC9A01A_DMA_NUM_SETTINGS                                                \
   2 // see if making it a constant value makes difference...
 #endif
 #endif

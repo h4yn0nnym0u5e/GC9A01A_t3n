@@ -67,7 +67,7 @@
 #define CBALLOC (GC9A01A_TFTHEIGHT * GC9A01A_TFTWIDTH * 2)
 #define COUNT_WORDS_WRITE                                                      \
   ((GC9A01A_TFTHEIGHT * GC9A01A_TFTWIDTH) /                                    \
-   SCREEN_DMA_NUM_SETTINGS) // Note I know the divide will give whole number
+   GC9A01A_DMA_NUM_SETTINGS) // Note I know the divide will give whole number
 
 #if defined(__MK66FX1M0__)
 // T3.6 use Scatter/gather with chain to do transfer
@@ -511,7 +511,7 @@ void GC9A01A_t3n::initDMASettings(void) {
   // BUGBUG:: check for -1 as wont work on SPI2 on T3.5
   //	uint16_t *fbtft_start_dma_addr = _pfbtft;
 
-  // Serial.printf("CWW: %d %d %d\n", CBALLOC, SCREEN_DMA_NUM_SETTINGS,
+  // Serial.printf("CWW: %d %d %d\n", CBALLOC, GC9A01A_DMA_NUM_SETTINGS,
   // count_words_write);
   // Now lets setup DMA access to this memory...
   _dmasettings[_spi_num][0].sourceBuffer(&_pfbtft[1], (COUNT_WORDS_WRITE-1)*2);
@@ -701,16 +701,16 @@ bool GC9A01A_t3n::updateScreenAsync(
   //==========================================
   if (update_cont) {
     // Try to link in #3 into the chain (_cnt_dma_settings)
-    _dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS-1].replaceSettingsOnCompletion(_dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS]);
-    _dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS-1].TCD->CSR &= ~(DMA_TCD_CSR_INTMAJOR | DMA_TCD_CSR_DREQ);  // Don't interrupt on this one... 
-    _dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS].interruptAtCompletion();
-    _dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS].TCD->CSR &= ~(DMA_TCD_CSR_DREQ);  // Don't disable on this one  
+    _dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS-1].replaceSettingsOnCompletion(_dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS]);
+    _dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS-1].TCD->CSR &= ~(DMA_TCD_CSR_INTMAJOR | DMA_TCD_CSR_DREQ);  // Don't interrupt on this one... 
+    _dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS].interruptAtCompletion();
+    _dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS].TCD->CSR &= ~(DMA_TCD_CSR_DREQ);  // Don't disable on this one  
     _dma_state |= GC9A01A_DMA_CONT;
   } else {
     // In this case we will only run through once...
-    _dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS-1].replaceSettingsOnCompletion(_dmasettings[_spi_num][0]);
-    _dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS-1].interruptAtCompletion();
-    _dmasettings[_spi_num][SCREEN_DMA_NUM_SETTINGS-1].disableOnCompletion();
+    _dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS-1].replaceSettingsOnCompletion(_dmasettings[_spi_num][0]);
+    _dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS-1].interruptAtCompletion();
+    _dmasettings[_spi_num][GC9A01A_DMA_NUM_SETTINGS-1].disableOnCompletion();
     _dma_state &= ~GC9A01A_DMA_CONT;
   }
 
