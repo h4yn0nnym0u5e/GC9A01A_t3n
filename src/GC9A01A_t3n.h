@@ -295,7 +295,7 @@ typedef struct {
 // Also define these in lower memory so as to make sure they are not cached...
 typedef struct {
   DMASetting      _dmasettings[2];
-  DMAChannel      _dmatx;
+  DMAChannel*     _pDMAtx{nullptr};
 } GC9A01A_DMA_Data_t;
 #endif
 
@@ -545,9 +545,9 @@ public:
   // added support to use optional Frame buffer
   enum {
     GC9A01A_DMA_INIT = 0x01,
-    GC9A01A_DMA_EVER_INIT = 0x08,
+    GC9A01A_DMA_EVER_INIT = 0x40,// 0x08,
     GC9A01A_DMA_CONT = 0x02,
-    GC9A01A_DMA_FINISH = 0x04,
+    //GC9A01A_DMA_FINISH = 0x04,
     GC9A01A_DMA_ACTIVE = 0x80
   };
   void setFrameBuffer(uint16_t *frame_buffer);
@@ -565,7 +565,16 @@ public:
   uint16_t *getFrameBuffer() { return _pfbtft; }
   uint32_t frameCount() { return _dma_frame_count; }
   uint16_t subFrameCount() { return _dma_sub_frame_count; }
-  boolean asyncUpdateActive(void) { return (_dma_state & GC9A01A_DMA_ACTIVE); }
+  boolean asyncUpdateActive(void) 
+  { 
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
+  volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
+#endif // T4.x  
+    return (_dma_state & GC9A01A_DMA_ACTIVE); 
+  }
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x 
+  void _attachInterrupt(DMAChannel& _dmatx);
+#endif // T4.x
   void initDMASettings(void);
   void setFrameCompleteCB(void (*pcb)(), bool fCallAlsoHalfDone = false);
 #else
@@ -720,11 +729,11 @@ protected:
 // Add DMA support.
   static GC9A01A_t3n *_dmaActiveDisplay[3]; // Use pointer to this as a way to
 
-  volatile uint8_t _dma_state = 0;            // DMA status
   volatile uint32_t _dma_frame_count = 0;     // Can return a frame count...
   volatile uint16_t _dma_sub_frame_count = 0; // Can return a frame count...
 #if defined(__MK66FX1M0__)
   // T3.6 use Scatter/gather with chain to do transfer
+  volatile uint8_t _dma_state = 0;            // DMA status
   static DMASetting _dmasettings[3][3];
   DMAChannel _dmatx;
 #elif defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
@@ -743,6 +752,7 @@ protected:
 #elif defined(__MK64FX512__)
   // T3.5 - had issues scatter/gather so do just use channels/interrupts
   // and update and continue
+  volatile uint8_t _dma_state = 0;            // DMA status
   static DMAChannel _dmatx;
   static DMAChannel _dmarx;
   static uint16_t _dma_count_remaining;

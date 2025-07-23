@@ -1,8 +1,6 @@
 Overview and Warning: 
 =====
-This Arduino library is for driving GC9A01A displays on Teensy 3.x or 4.x boards from 
-PJRC(https://www.pjrc.com/) and I have played with it on a few different
-ILI9341 displays including ones from PJRC such as: https://www.pjrc.com/store/display_ili9341_touch.html and ones from Adafruit such as: https://www.adafruit.com/product/1770
+This Arduino library is for driving GC9A01A displays on Teensy 3.x or 4.x boards 
 
 This is a modified version of the official PJRC ILI9341_t3n library (https://github.com/PaulStoffregen/ILI9341_t3).
 And it is always a Work In Progress.

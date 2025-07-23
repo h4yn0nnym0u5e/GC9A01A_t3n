@@ -18,7 +18,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/KurtE/ILI9341_t3n.git"
+    "url": "https://github.com/mjs513/GC9A01A_t3n"
   },
   "frameworks": "arduino",
   "platforms": "*"

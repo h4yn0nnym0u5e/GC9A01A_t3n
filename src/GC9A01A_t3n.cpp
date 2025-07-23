@@ -170,9 +170,12 @@ void GC9A01A_t3n::process_dma_interrupt(void) {
                   (_dma_data[_spi_num]._dmatx.TCD->SADDR > _dma_data[_spi_num]._dmasettings[1].TCD->SADDR) ? '>' : '<');
   }
 #endif
-  _dma_data[_spi_num]._dmatx.clearInterrupt();
+  volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
+  DMAChannel& _dmatx = *_dma_data[_spi_num]._pDMAtx;
+
+  _dmatx.clearInterrupt();
   if (_frame_callback_on_HalfDone &&
-      (_dma_data[_spi_num]._dmatx.TCD->SADDR > _dma_data[_spi_num]._dmasettings[1].TCD->SADDR)) {
+      (_dmatx.TCD->SADDR > _dma_data[_spi_num]._dmasettings[1].TCD->SADDR)) {
     _dma_sub_frame_count = 1; // set as partial frame.
     if (_frame_complete_callback)
       (*_frame_complete_callback)();
@@ -199,7 +202,7 @@ void GC9A01A_t3n::process_dma_interrupt(void) {
       while (_pimxrt_spi->SR & LPSPI_SR_MBF)
         ; // wait until this one is complete
 
-      _dma_data[_spi_num]._dmatx.clearComplete();
+      _dmatx.clearComplete();
       // Serial.println("Restore FCR");
       _pimxrt_spi->FCR = LPSPI_FCR_TXWATER(
           15);              // _spi_fcr_save;	// restore the FSR status...
@@ -353,6 +356,7 @@ void GC9A01A_t3n::setFrameBuffer(uint16_t *frame_buffer) {
           memset(_pfbtft, 0, GC9A01A_TFTHEIGHT*GC9A01A_TFTWIDTH*2);
   }
   */
+  volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
   _dma_state &= ~GC9A01A_DMA_INIT; // clear that we init the dma chain as our
                                    // buffer has changed...
 
@@ -365,8 +369,9 @@ void GC9A01A_t3n::setFrameCompleteCB(void (*pcb)(), bool fCallAlsoHalfDone) {
   _frame_callback_on_HalfDone = pcb ? fCallAlsoHalfDone : false;
 
   noInterrupts();
+  volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
   _dma_state &=
-      ~GC9A01A_DMA_INIT; // Lets setup  the call backs on next call out
+      ~GC9A01A_DMA_INIT; // Let's set up the callbacks on next call out
   interrupts();
 }
 #endif
@@ -497,12 +502,29 @@ void dumpDMA_TCD(DMABaseClass *dmabc, const char *psz_title) {
 #ifdef ENABLE_GC9A01A_FRAMEBUFFER
 //==============================================
 #ifdef ENABLE_GC9A01A_FRAMEBUFFER
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x 
+void GC9A01A_t3n::_attachInterrupt(DMAChannel& _dmatx)
+{
+  // probably could use const table of functions...
+  if (_spi_num == 0) _dmatx.attachInterrupt(dmaInterrupt);
+  else if (_spi_num == 1) _dmatx.attachInterrupt(dmaInterrupt1);
+  else _dmatx.attachInterrupt(dmaInterrupt2);
+}
+#endif // T4.x
+
 void GC9A01A_t3n::initDMASettings(void) {
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
+  volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
+  DMAChannel& _dmatx = _shared_spi_status[_spi_num].DMAch;
+  if (nullptr == _dma_data[_spi_num]._pDMAtx)
+    _dma_data[_spi_num]._pDMAtx = &_dmatx;
+#endif // T4.x  
   //Serial.printf("initDMASettings called %d\n", _dma_state);
+  /*
   if (_dma_state & GC9A01A_DMA_INIT) { // should test for init, but...
     return;                            // we already init this.
   }
-
+*/
   // Serial.println("InitDMASettings");
   uint8_t dmaTXevent = _spi_hardware->tx_dma_channel;
 #if defined(__MK66FX1M0__)
@@ -551,39 +573,41 @@ void GC9A01A_t3n::initDMASettings(void) {
 #ifdef DEBUG_ASYNC_LEDS
   digitalWriteFast(DEBUG_PIN_4, !digitalReadFast(DEBUG_PIN_4));
 #endif
-  _dma_data[_spi_num]._dmasettings[0].sourceBuffer(_pfbtft, (COUNT_WORDS_WRITE)*2);
-  _dma_data[_spi_num]._dmasettings[0].destination(_pimxrt_spi->TDR);
-  _dma_data[_spi_num]._dmasettings[0].TCD->ATTR_DST = 1;
-  _dma_data[_spi_num]._dmasettings[0].replaceSettingsOnCompletion(_dma_data[_spi_num]._dmasettings[1]);
+  // only one way to do async update, but has it been set up?
+  if (0 == _dma_data[_spi_num]._dmasettings[0].TCD->DADDR)
+  {
+    _dma_data[_spi_num]._dmasettings[0].sourceBuffer(_pfbtft, (COUNT_WORDS_WRITE)*2);
+    _dma_data[_spi_num]._dmasettings[0].destination(_pimxrt_spi->TDR);
+    _dma_data[_spi_num]._dmasettings[0].TCD->ATTR_DST = 1;
+    _dma_data[_spi_num]._dmasettings[0].replaceSettingsOnCompletion(_dma_data[_spi_num]._dmasettings[1]);
 
-  _dma_data[_spi_num]._dmasettings[1].sourceBuffer(&_pfbtft[COUNT_WORDS_WRITE],
-                               COUNT_WORDS_WRITE * 2);
-  _dma_data[_spi_num]._dmasettings[1].destination(_pimxrt_spi->TDR);
-  _dma_data[_spi_num]._dmasettings[1].TCD->ATTR_DST = 1;
+    _dma_data[_spi_num]._dmasettings[1].sourceBuffer(&_pfbtft[COUNT_WORDS_WRITE],
+                                COUNT_WORDS_WRITE * 2);
+    _dma_data[_spi_num]._dmasettings[1].destination(_pimxrt_spi->TDR);
+    _dma_data[_spi_num]._dmasettings[1].TCD->ATTR_DST = 1;
 
-  _dma_data[_spi_num]._dmasettings[1].replaceSettingsOnCompletion(_dma_data[_spi_num]._dmasettings[0]);
-  _dma_data[_spi_num]._dmasettings[1].interruptAtCompletion();
-  if (_frame_callback_on_HalfDone)
-    _dma_data[_spi_num]._dmasettings[0].interruptAtCompletion();
-  else
-    _dma_data[_spi_num]._dmasettings[0].TCD->CSR &= ~(DMA_TCD_CSR_DREQ);
-
+    _dma_data[_spi_num]._dmasettings[1].replaceSettingsOnCompletion(_dma_data[_spi_num]._dmasettings[0]);
+    _dma_data[_spi_num]._dmasettings[1].interruptAtCompletion();
+    if (_frame_callback_on_HalfDone)
+      _dma_data[_spi_num]._dmasettings[0].interruptAtCompletion();
+    else
+      _dma_data[_spi_num]._dmasettings[0].TCD->CSR &= ~(DMA_TCD_CSR_DREQ);
+  }
   // Setup DMA main object
   //Serial.println("Setup _dmatx");
   // Serial.println("DMA initDMASettings - before dmatx");
 #ifdef DEBUG_ASYNC_LEDS
     digitalWriteFast(DEBUG_PIN_4, !digitalReadFast(DEBUG_PIN_4));
 #endif
-  _dma_data[_spi_num]._dmatx.begin(true);
-  _dma_data[_spi_num]._dmatx.triggerAtHardwareEvent(dmaTXevent);
+  if (nullptr == _dmatx.TCD)    
+    _dmatx.begin(true);
+  _dmatx.triggerAtHardwareEvent(dmaTXevent);
 #ifdef DEBUG_ASYNC_LEDS
     digitalWriteFast(DEBUG_PIN_4, !digitalReadFast(DEBUG_PIN_4));
 #endif
-  _dma_data[_spi_num]._dmatx = _dma_data[_spi_num]._dmasettings[0];
-  // probably could use const table of functions...
-  if (_spi_num == 0) _dma_data[_spi_num]._dmatx.attachInterrupt(dmaInterrupt);
-  else if (_spi_num == 1) _dma_data[_spi_num]._dmatx.attachInterrupt(dmaInterrupt1);
-  else _dma_data[_spi_num]._dmatx.attachInterrupt(dmaInterrupt2);
+  _dmatx = _dma_data[_spi_num]._dmasettings[0];
+
+  _attachInterrupt(_dmatx);
 
 #ifdef DEBUG_ASYNC_LEDS
   digitalWriteFast(DEBUG_PIN_4, !digitalReadFast(DEBUG_PIN_4));
@@ -659,6 +683,9 @@ bool GC9A01A_t3n::updateScreenAsync(
 // Will go by buffer as maybe can do interesting things?
 // BUGBUG:: only handles full screen so bail on the rest of it...
 #ifdef ENABLE_GC9A01A_FRAMEBUFFER
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
+  volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
+#endif // T4.x  
   if (!_use_fbtft)
     return false;
 
@@ -768,15 +795,16 @@ bool GC9A01A_t3n::updateScreenAsync(
   _pimxrt_spi->DER = LPSPI_DER_TDDE;
   _pimxrt_spi->SR = 0x3f00; // clear out all of the other status...
 
-   _dma_data[_spi_num]._dmatx.triggerAtHardwareEvent(_spi_hardware->tx_dma_channel);
+  DMAChannel& _dmatx = *_dma_data[_spi_num]._pDMAtx;
+  //_dmatx.triggerAtHardwareEvent(_spi_hardware->tx_dma_channel);
 
-   _dma_data[_spi_num]._dmatx = _dma_data[_spi_num]._dmasettings[0];
+  _dmatx = _dma_data[_spi_num]._dmasettings[0];
 #ifdef DEBUG_ASYNC_LEDS
   digitalWriteFast(DEBUG_PIN_4, !digitalReadFast(DEBUG_PIN_4));
 #endif
 
-   _dma_data[_spi_num]._dmatx.begin(false);
-   _dma_data[_spi_num]._dmatx.enable();
+  _dmatx.begin(false);
+  _dmatx.enable();
 
   _dma_frame_count = 0; // Set frame count back to zero.
   _dmaActiveDisplay[_spi_num] = this;
@@ -868,6 +896,9 @@ bool GC9A01A_t3n::updateScreenAsync(
 void GC9A01A_t3n::endUpdateAsync() {
 // make sure it is on
 #ifdef ENABLE_GC9A01A_FRAMEBUFFER
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
+  volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
+#endif // T4.x  
   if (_dma_state & GC9A01A_DMA_CONT) {
     _dma_state &= ~GC9A01A_DMA_CONT; // Turn of the continueous mode
 #if defined(__MK66FX1M0__)
@@ -885,8 +916,9 @@ void GC9A01A_t3n::waitUpdateAsyncComplete(void) {
   digitalWriteFast(DEBUG_PIN_3, HIGH);
 #endif
 
-  while ((_dma_state & GC9A01A_DMA_ACTIVE)) {
+  while (asyncUpdateActive()) {
     // asm volatile("wfi");
+    yield(); // may take some time
   };
 #ifdef DEBUG_ASYNC_LEDS
   digitalWriteFast(DEBUG_PIN_3, LOW);
