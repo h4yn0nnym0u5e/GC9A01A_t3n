@@ -83,7 +83,7 @@ DMAChannel GC9A01A_t3n::_dmatx;
 DMAChannel GC9A01A_t3n::_dmarx;
 uint16_t GC9A01A_t3n::_dma_count_remaining;
 uint16_t GC9A01A_t3n::_dma_write_size_words;
-volatile short _dma_dummy_rx;
+volatile short _dma_dummy_rx __attribute__((weak));
 #endif
 
 GC9A01A_t3n *GC9A01A_t3n::_dmaActiveDisplay[3] = {0, 0, 0};
@@ -356,7 +356,9 @@ void GC9A01A_t3n::setFrameBuffer(uint16_t *frame_buffer) {
           memset(_pfbtft, 0, GC9A01A_TFTHEIGHT*GC9A01A_TFTWIDTH*2);
   }
   */
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
   volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
+#endif // T4.x  
   _dma_state &= ~GC9A01A_DMA_INIT; // clear that we init the dma chain as our
                                    // buffer has changed...
 
@@ -369,7 +371,9 @@ void GC9A01A_t3n::setFrameCompleteCB(void (*pcb)(), bool fCallAlsoHalfDone) {
   _frame_callback_on_HalfDone = pcb ? fCallAlsoHalfDone : false;
 
   noInterrupts();
+#if defined(__IMXRT1052__) || defined(__IMXRT1062__) // Teensy 4.x
   volatile uint8_t& _dma_state = _shared_spi_status[_spi_num]._dma_state;
+#endif // T4.x  
   _dma_state &=
       ~GC9A01A_DMA_INIT; // Let's set up the callbacks on next call out
   interrupts();
